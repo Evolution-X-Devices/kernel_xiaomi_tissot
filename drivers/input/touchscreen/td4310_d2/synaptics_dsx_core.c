@@ -3364,6 +3364,19 @@ static int synaptics_rmi4_gpio_setup(int gpio, bool config, int dir, int state)
 	int retval = 0;
 	unsigned char buf[16];
 
+	/*
+	 * bdata->irq_gpio in particular is passed here unconditionally by
+	 * synaptics_rmi4_set_gpio() with no >= 0 check (unlike power_gpio
+	 * and reset_gpio). If DT parsing ever yields an unparsed/invalid
+	 * value, gpio_request()/gpio_to_desc() below would be called with
+	 * garbage, producing "invalid GPIO" WARNs and duplicate-sysfs
+	 * failures on reprobe. Fail cleanly instead.
+	 */
+	if (!gpio_is_valid(gpio)) {
+		pr_err("%s: Invalid gpio %d\n", __func__, gpio);
+		return config ? -EINVAL : 0;
+	}
+
 	if (config) {
 		snprintf(buf, sizeof(buf), "dsx_gpio_%u\n", gpio);
 

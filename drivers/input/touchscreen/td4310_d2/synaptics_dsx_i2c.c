@@ -73,7 +73,6 @@ static int parse_dt(struct device *dev, struct synaptics_dsx_board_data *bdata)
 	bdata->reset_gpio = of_get_named_gpio_flags(np,
 			"synaptics,rst-gpio", 0,
 			NULL);
-printk("reset gpio : %d\n", bdata->reset_gpio);
 	retval = of_property_read_u32(np, "synaptics,irq-on-state",
 			&value);
 	if (retval < 0)
@@ -125,10 +124,27 @@ printk("reset gpio : %d\n", bdata->reset_gpio);
 		bdata->power_delay_ms = 0;
 	}
 
+	/*
+	 * Some board files (e.g. tissot) describe the reset line with the
+	 * shorter "synaptics,rst-gpio" property read above instead of
+	 * "synaptics,reset-gpio". Only fall back to that alternate property
+	 * name, and only clobber reset_gpio with -1, when the primary
+	 * "synaptics,rst-gpio" lookup above did not already yield a valid
+	 * GPIO. Previously this block unconditionally overwrote a validly
+	 * parsed reset_gpio with -1 whenever "synaptics,reset-gpio" was
+	 * absent, silently disabling the reset line and skipping the
+	 * reset-on-state/reset-active-ms reads below even though those
+	 * properties were present in the DT.
+	 */
 	prop = of_find_property(np, "synaptics,reset-gpio", NULL);
 	if (prop && prop->length) {
 		bdata->reset_gpio = of_get_named_gpio_flags(np,
 				"synaptics,reset-gpio", 0, NULL);
+	} else if (!gpio_is_valid(bdata->reset_gpio)) {
+		bdata->reset_gpio = -1;
+	}
+
+	if (gpio_is_valid(bdata->reset_gpio)) {
 		retval = of_property_read_u32(np, "synaptics,reset-on-state",
 				&value);
 		if (retval < 0) {
@@ -147,8 +163,6 @@ printk("reset gpio : %d\n", bdata->reset_gpio);
 		} else {
 			bdata->reset_active_ms = value;
 		}
-	} else {
-		bdata->reset_gpio = -1;
 	}
 
 	prop = of_find_property(np, "synaptics,reset-delay-ms", NULL);
